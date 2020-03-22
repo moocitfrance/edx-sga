@@ -10,23 +10,48 @@
       </p>
     <% } %>
     <% if (upload_allowed) { %>
-      <p class="upload">
-        <label>
-          <% if (uploaded) { %>
-            {% trans "Upload a different file" %}
-          <% } else { %>
-            {% trans "Upload your assignment" %}
-          <% } %>
-          <input class="fileupload" type="file" name="assignment" />
-        </label>
-      </p>
+      <% if (submission_type == 'file') { %>
+        <div>
+          <p class="upload">
+            <label>
+              <% if (uploaded) { %>
+                {% trans "Upload a different file" %}
+              <% } else { %>
+                {% trans "Upload your assignment" %}
+              <% } %>
+              <input class="fileupload" type="file" name="assignment" />
+            </label>
+          </p>
+        </div>
+      <% } %>
+      <% if (submission_type == 'text') { %>
+        <div>
+          <p>
+            <label>
+              {% trans "Write your response" %}
+              
+            </label>
+          </p>
+          <textarea class="user_response" name="user_response"></textarea>
+          <input class="userresponse" type="button" name="user_response_action" value="Submit your response" />
+        </div>
+      <% } %>
     <% } %>
     <% if (uploaded) { %>
       <div class="sequential-status-message">
+        <% if (uploaded.filename) { %>
         <p>
           <b>{% trans "File uploaded" %}</b>
           <a href="<%= downloadUrl %>"><%= uploaded.filename %></a>
         </p>
+        <% } %>
+
+        <% if (uploaded.user_response) { %>
+        <p>
+          <b>{% trans "User Response" %}</b>
+          <%= uploaded.user_response %>
+        </p>
+        <% } %>
         <p>
           <% if (graded) { %>
             {% blocktrans %}Your score is <%= graded.score %> / <%= max_score %>{% endblocktrans %}<br/>
@@ -69,6 +94,7 @@
         <th class="header">{% trans "Username" %} <i class="icon fa fa-sort"/></th>
         <th class="header">{% trans "Name" %} <i class="icon fa fa-sort"/></th>
         <th class="header">{% trans "Filename" %} <i class="icon fa fa-sort"/></th>
+        <th class="header">{% trans "User Response" %} <i class="icon fa fa-sort"/></th>
         <th class="header">{% trans "Uploaded" %} <i class="icon fa fa-sort"/></th>
         <th class="header">{% trans "Submitted" %} <i class="icon fa fa-sort"/></th>
         <th class="header">{% trans "Grade" %} <i class="icon fa fa-sort"/></th>
@@ -88,6 +114,11 @@
               <a href="<%= downloadUrl %>?student_id=<%= assignment.student_id %>">
                 <%= assignment.filename %>
               </a>
+            <% } %>
+          </td>
+          <td>
+            <% if (assignment.user_response) { %>
+                <%= assignment.user_response %>
             <% } %>
           </td>
           <td><%= assignment.timestamp %></td>

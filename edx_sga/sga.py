@@ -75,7 +75,7 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
     has_score = True
     icon_class = 'problem'
     STUDENT_FILEUPLOAD_MAX_SIZE = 4 * 1000 * 1000  # 4 MB
-    editable_fields = ('display_name', 'points', 'weight', 'showanswer', 'solution')
+    editable_fields = ('display_name', 'submission_type', 'points', 'weight', 'showanswer', 'solution')
 
     display_name = String(
         display_name=_("Display Name"),
@@ -83,6 +83,17 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
         scope=Scope.settings,
         help=_("This name appears in the horizontal navigation at the top of "
                "the page.")
+    )
+
+    submission_type = String(
+        display_name=_("Submission Type"),
+        help=_("Defines user will submit file or text."),
+        scope=Scope.settings,
+        default=None,
+        values=[
+            {"display_name": _("Text"), "value": "text"},
+            {"display_name": _("File Upload"), "value": "file"},
+        ]
     )
 
     weight = Float(
@@ -122,6 +133,13 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
         default=None,
         help=_("sha1 of the annotated file uploaded by the instructor for "
                "this assignment.")
+    )
+
+    user_response = String(
+        display_name=_("User Response"),
+        scope=Scope.user_state,
+        default=None,
+        help=_("User response for this assignment.")
     )
 
     annotated_filename = String(
@@ -209,6 +227,7 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
         Persist block data when updating settings in studio.
         """
         self.display_name = data.get('display_name', self.display_name)
+        self.submission_type = data.get('submission_type', self.submission_type)
 
         # Validate points before saving
         points = data.get('points', self.points)
@@ -236,6 +255,24 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
                     400, 'Weight must be a positive decimal number'
                 )
         self.weight = weight
+
+    @XBlock.handler
+    def save_response(self, request, suffix=''):
+        # pylint: disable=unused-argument, protected-access
+        """
+        Save a students long text answer.
+        """
+        user = self.get_real_user()
+        require(user)
+        user_response = request.params['user_response']
+        self.get_or_create_student_module(user)
+        answer = {
+            "user_response": user_response,
+            "finalized": False
+        }
+        student_item_dict = self.get_student_item_dict()
+        submissions_api.create_submission(student_item_dict, answer)
+        return Response(json_body=self.student_state())
 
     @XBlock.handler
     def upload_assignment(self, request, suffix=''):
@@ -623,10 +660,13 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
                 self.get_student_item_dict(student_id)
         ):
             submission_file_sha1 = submission['answer'].get('sha1')
-            submission_filename = submission['answer'].get('filename')
-            submission_file_path = self.file_storage_path(submission_file_sha1, submission_filename)
-            if default_storage.exists(submission_file_path):
-                default_storage.delete(submission_file_path)
+            submission_filename = submission['answer'].get('filename', None)
+
+            if submission_filtename:
+                submission_file_path = self.file_storage_path(submission_file_sha1, submission_filename)
+                if default_storage.exists(submission_file_path):
+                    default_storage.delete(submission_file_path)
+
             submissions_api.reset_score(
                 student_id,
                 self.block_course_id,
@@ -758,10 +798,13 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
         rendering in client view.
         """
         submission = self.get_submission()
+        uploaded = None
+
         if submission:
-            uploaded = {"filename": submission['answer']['filename']}
-        else:
-            uploaded = None
+            if 'user_response' in submission['answer'].keys():
+                uploaded = {"user_response": submission['answer']['user_response']}
+            elif 'filename' in submission['answer'].keys():
+                uploaded = {"filename": submission['answer']['filename']}
 
         if self.annotated_sha1:
             annotated = {"filename": force_text(self.annotated_filename)}
@@ -780,6 +823,7 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
             solution = ''
         # pylint: disable=no-member
         return {
+            "submission_type": force_text(self.submission_type),
             "display_name": force_text(self.display_name),
             "uploaded": uploaded,
             "annotated": annotated,
@@ -821,13 +865,21 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
                 else:
                     needs_approval = False
                 instructor = self.is_instructor()
+
+                filename, user_response = None, None
+                if "filename" in submission['answer'].keys():
+                    filename = submission['answer']['filename']
+                if "user_response" in submission['answer'].keys():
+                    user_response = submission['answer']['user_response']
+
                 yield {
                     'module_id': student_module.id,
                     'student_id': student.student_id,
                     'submission_id': submission['uuid'],
                     'username': student_module.student.username,
                     'fullname': student_module.student.profile.name,
-                    'filename': submission['answer']["filename"],
+                    'filename': filename,
+                    'user_response': user_response,
                     'timestamp': submission['created_at'].strftime(
                         DateTime.DATETIME_FORMAT
                     ),
@@ -857,9 +909,16 @@ class StaffGradedAssignmentXBlock(StudioEditableXBlockMixin, ShowAnswerXBlockMix
 
         for submission in submissions:
             if is_finalized_submission(submission_data=submission):
+                filename, user_response = None, None
+                if "filename" in submission['answer'].keys():
+                    filename = submission['answer']['filename']
+                if "user_response" in submission['answer'].keys():
+                    user_response = submission['answer']['user_response']
+
                 assignments.append({
                     'submission_id': submission['uuid'],
-                    'filename': submission['answer']["filename"],
+                    'filename': filename,
+                    'user_response': user_response,
                     'timestamp': submission['submitted_at'] or submission['created_at']
                 })
 

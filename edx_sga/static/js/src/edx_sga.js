@@ -2,6 +2,7 @@
 function StaffGradedAssignmentXBlock(runtime, element) {
     function xblock($, _) {
         var uploadUrl = runtime.handlerUrl(element, 'upload_assignment');
+        var saveResponseUrl = runtime.handlerUrl(element, 'save_response');
         var finalizeUploadUrl = runtime.handlerUrl(element, 'finalize_uploaded_assignment');
         var downloadUrl = runtime.handlerUrl(element, 'download_assignment');
         var annotatedUrl = runtime.handlerUrl(element, 'download_annotated');
@@ -44,6 +45,25 @@ function StaffGradedAssignmentXBlock(runtime, element) {
                       render(state);
                   }
               );
+            });
+
+            $(content).find('.userresponse').click(function(eventObject) {
+                var user_response = $(this).parent().find('.user_response')
+                if(user_response.val()){
+                    $.ajax({
+                      type: "POST",
+                      url: saveResponseUrl,
+                      data: {
+                              user_response: $('.user_response').val()
+                            },
+                      success: function(data){
+                        render(data);
+                      }
+                    });
+                }
+                else {
+                    user_response.focus()
+                }
             });
 
             // Set up file upload

@@ -66,15 +66,24 @@ def get_file_storage_path(locator, file_hash, original_filename):
     """
     Returns the file path for an uploaded SGA submission file
     """
-    return (
-        six.u(
-            '{loc.org}/{loc.course}/{loc.block_type}/{loc.block_id}/{file_hash}{ext}'
-        ).format(
-            loc=locator,
-            file_hash=file_hash,
-            ext=os.path.splitext(original_filename)[1]
+    try:
+        return (
+            six.u(
+                '{loc.org}/{loc.course}/{loc.block_type}/{loc.block_id}/{file_hash}{ext}'
+            ).format(
+                loc=locator,
+                file_hash=file_hash,
+                ext=os.path.splitext(original_filename)[1]
+            )
         )
-    )
+    except:
+        return (
+            six.u(
+                '{loc.org}/{loc.course}/{loc.block_type}/{loc.block_id}'
+            ).format(
+                loc=locator,
+            )
+        )
 
 
 def file_contents_iter(file_path):
